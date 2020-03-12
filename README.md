@@ -12,6 +12,9 @@ https://github.com/OcugineGames/Unity-VK-SDK
 - Windows 7 и выше (x86 и x64);
 - MacOS X;
 
+## Использование
+Для начала работы - скопируйте все файлы из репозитория в директорию Assets вашего проекта в Unity.
+
 ## Используемые компоненты
 Для организации работы **WebView** в авторизации используется (https://github.com/gree/unity-webview) для **Mac** и WWebView (https://github.com/icodes-studio/WWebView) для **Windows**.
 
