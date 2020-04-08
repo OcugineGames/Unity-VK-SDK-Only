@@ -27,10 +27,6 @@ public class ApplicationSettingsModel{
     [Tooltip("Защищенный ключ")] public string secure_key;                                  // Secure Key
     [Tooltip("Сервисный ключ доступа")] public string service_key;                          // Service Key
     [Space]
-    [Header("Настройки авторизации")]
-    [Tooltip("Тип Отображения Авторизации")] public string display = "page";                // Auth Display Type
-    [Tooltip("Тип Авторизации")] public string response_type = "token";                     // Auth Response Type
-    [Tooltip("Произвольная строка авторизации")] public string state = "";                  // Auth State String
     [Header("Права доступа приложения")]
     [Tooltip("Доступ к списку друзей")] public bool friends = true;
     [Tooltip("Доступ к уведомлениям")] public bool notify = true;

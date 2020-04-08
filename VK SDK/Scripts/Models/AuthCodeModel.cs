@@ -11,26 +11,19 @@ using UnityEngine;
 //
 //  @name           VK Standalone SDK
 //  @developer      Ocugine Games
-//  @version        0.4.2
-//  @build          402
+//  @version        0.4.3
+//  @build          403
 //  @url            https://vk.com/ocugine
 //  @license        MIT
 //===================================================
 //===================================================
-//  VK SDK Base Request Model
+//  VK SDK Authentication Code Response Model
 //===================================================
 [System.Serializable]
-public class BaseRequestModel{
-    public BaseResponseModel response; // Response Model
-    public BaseErrorModel error; // Error Model
-}
-
-[System.Serializable]
-public class BaseResponseModel{
-}
-
-[System.Serializable]
-public class BaseErrorModel{
-    public int error_code = -1; // Error Code
-    public string error_msg = ""; // Error Message
+public class AuthCodeModel{
+    public string auth_code = "";           // VK Authentication Code
+    public string device_id = "";           // VK Device ID
+    public long expires_in = 0;             // VK Code Expires Time
+    public string auth_url = "";            // VK Auth Url
+    public string device_name = "";         // VK Device Name
 }

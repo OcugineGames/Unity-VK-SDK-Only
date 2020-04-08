@@ -5,11 +5,6 @@ using System.Text;
 using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Net.Http;
-using ICODES.STUDIO.WWebView;
-using System.Net;
-using System.Collections.Specialized;
-using System.Text.RegularExpressions;
 
 //===================================================
 //  VK Standalone SDK
@@ -20,8 +15,8 @@ using System.Text.RegularExpressions;
 //
 //  @name           VK Standalone SDK
 //  @developer      Ocugine Games
-//  @version        0.4.2
-//  @build          402
+//  @version        0.4.3
+//  @build          403
 //  @url            https://vk.com/ocugine
 //  @license        MIT
 //===================================================
@@ -43,17 +38,15 @@ namespace VK.SDK{
         [HideInInspector] public AuthenticationModel authentication;                    // VK SDK Authentication Data
 
         // Private Variables
-        private static string _oauth_uri = "https://oauth.vk.com/authorize";            // VK OAuth URI
+        private static string _oauth_uri = "https://oauth.vk.com/";                     // VK OAuth URI
         private static string _api_uri = "https://api.vk.com/method/";                  // VK API Gateway URI
         private static string _sdk_settings_path;                                       // VK SDK Settings Path
         private static string _app_settings_path;                                       // VK SDK Application Settings Path
         private static string _auth_data_path;                                          // VK Authentication Data Path
+        private static string _log_data_path;                                           // VK SDK Log Path
 
-        // WebView Params
-        private bool _webViewInitialized = false;                                       // WebView Initialization Status
-        private GameObject _webViewObject = null;                                       // WebView Game Object
-        private WebViewObject _macWVObj = null;                                         // MacOS WebView Object
-        private WWebView _winWVObj = null;                                              // Windows WebView Object
+        // Private Authentication Variables
+        private AuthCodeModel _authCode;                                                // VK Auth Code model
 
         //============================================================
         //  @class      VKSDK
@@ -63,10 +56,10 @@ namespace VK.SDK{
         //============================================================
         void Awake(){
             // Set Settings Paths
-            Debug.Log("Инициализация VK SDK...");
             _sdk_settings_path = Application.persistentDataPath + "/sdk_settings.vkconf"; // SDK Settings
             _app_settings_path = Application.persistentDataPath + "/app_settings.vkconf"; // App Settings
             _auth_data_path = Application.persistentDataPath + "/app_auth.vkconf"; // Authentication Data
+            _log_data_path = Application.persistentDataPath + "/vk_sdk.log"; // Log Data Path
 
             // Check Instance of VKSDK
             if (instance == null){ // Instance not found
@@ -81,7 +74,6 @@ namespace VK.SDK{
 
             // Initialize Settings
             _initializeSettings();  // Start VK SDK Initialization
-            _webViewObject = _initializeWebView(); // Initialize WebView
             initialized = true;     // Set Initialized Flag
         }
 
@@ -112,17 +104,24 @@ namespace VK.SDK{
         //  @usage      Unity Log Handler
         //============================================================
         private void HandleLog(string logString, string stackTrace, LogType type){
-            /*if (application.auto_crash_reporting && type != LogType.Warning && type != LogType.Log && this.reports != null){ // Auto Crash reporting
+            if (settings.debug_mode && type != LogType.Warning && type != LogType.Log){ // Crash Reporting to the Log
                 bool critical = (type == LogType.Error || type == LogType.Assert) ? false : true; // Critical Error
                 string message = logString + ". \n\n Stack Trace: " + stackTrace; // Log Message
-                string code = "UERROR:";
+                string code = "Unknown Error Type";
                 if (type == LogType.Error)
-                    code = code + " Error";
+                    code = "Script Error";
                 if (type == LogType.Assert)
-                    code = code + " Assert";
+                    code = "Script Assert";
                 if (type == LogType.Exception)
-                    code = code + " Exception";
-            }*/
+                    code = "Script Exception";
+
+                // Save Log
+                string _error_data = "";
+                _error_data += "VK SDK Error Type: " + code + "\n\n";
+                _error_data += "================================== \n\n";
+                _error_data += message;
+                Debug.Log("Возникло исключение при работе скрипта. Данные об ошибке записаны в "+_log_data_path);
+            }
         }
 
         //============================================================
@@ -135,6 +134,7 @@ namespace VK.SDK{
             // Load SDK Settings
             string _sdk_cfg = LoadSDKConfigs(_sdk_settings_path, true); // Load
             if (_sdk_cfg != null) settings = JsonUtility.FromJson<SDKSettingsModel>(_sdk_cfg); // Deserialize SDK Configs
+            if (settings.debug_mode) Debug.Log("Инициализация VK SDK...");
 
             // Load App Settings
             string _app_cfg = LoadSDKConfigs(_app_settings_path, true); // Load
@@ -144,6 +144,7 @@ namespace VK.SDK{
             if (application.autosave_data){
                 string _auth_data = LoadSDKConfigs(_auth_data_path, true); // Load
                 if (_auth_data != null) authentication = JsonUtility.FromJson<AuthenticationModel>(_auth_data); // Deserialize Authenitcation Data
+                if (settings.debug_mode && _auth_data!=null) Debug.Log("Токен пользователя инициализирован.");
             }
 
             // Initialize Platform
@@ -151,95 +152,7 @@ namespace VK.SDK{
                 settings.platform = "other";
                 if (Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.OSXPlayer) settings.platform = "mac";
                 if (Application.platform == RuntimePlatform.WindowsEditor || Application.platform == RuntimePlatform.WindowsPlayer) settings.platform = "windows";
-            }
-        }
-
-        //============================================================
-        //  @class      VKSDK
-        //  @method     _getWebView()
-        //  @type       Private Void
-        //  @usage      Initialize WebView
-        //============================================================
-        private GameObject _initializeWebView(){
-            if (Application.platform == RuntimePlatform.WindowsEditor || Application.platform == RuntimePlatform.WindowsPlayer){
-                if (!_webViewInitialized){ // WebView is Not Initialized
-                    _webViewObject = new GameObject(); // Create Object
-                    _webViewObject.transform.SetSiblingIndex((this.gameObject.transform.GetSiblingIndex() + 1)); // Sort
-                    _winWVObj = _webViewObject.AddComponent<WWebView>(); // Create Component and Set Link
-                    _webViewObject.SetActive(false);
-                    return _webViewObject; // Return
-                } else {
-                    return _webViewObject; // Return
-                }
-            } else {
-                if (!_webViewInitialized){ // WebView is Not Initialized
-                    _webViewObject = new GameObject(); // Create Object
-                    _webViewObject.transform.SetSiblingIndex((this.gameObject.transform.GetSiblingIndex()+1)); // Sort
-                    _macWVObj = _webViewObject.AddComponent<WebViewObject>(); // Create Component and set Link
-                    _macWVObj.Init(cb: (msg) => {
-                            Debug.Log(string.Format("CallFromJS[{0}]", msg));
-                        },
-                        err: (msg) => {
-                            OnMacNavigationError(msg);
-                            Debug.Log(string.Format("CallOnError[{0}]", msg));
-                        },
-                        started: (msg) => {
-                            Debug.Log(string.Format("CallOnStarted[{0}]", msg));
-                        },
-                        ld: (msg) => {
-                            OnMacNavigationComplete(msg);
-                            Debug.Log(string.Format("CallOnLoaded[{0}]", msg));
-                            #if UNITY_EDITOR_OSX || !UNITY_ANDROID
-                            #if true
-                            _macWVObj.EvaluateJS(@"
-                                      if (window && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.unityControl) {
-                                        window.Unity = {
-                                          call: function(msg) {
-                                            window.webkit.messageHandlers.unityControl.postMessage(msg);
-                                          }
-                                        }
-                                      } else {
-                                        window.Unity = {
-                                          call: function(msg) {
-                                            window.location = 'unity:' + msg;
-                                          }
-                                        }
-                                      }
-                                    ");
-                            #else
-                                    webView.EvaluateJS(@"
-                                      if (window && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.unityControl) {
-                                        window.Unity = {
-                                          call: function(msg) {
-                                            window.webkit.messageHandlers.unityControl.postMessage(msg);
-                                          }
-                                        }
-                                      } else {
-                                        window.Unity = {
-                                          call: function(msg) {
-                                            var iframe = document.createElement('IFRAME');
-                                            iframe.setAttribute('src', 'unity:' + msg);
-                                            document.documentElement.appendChild(iframe);
-                                            iframe.parentNode.removeChild(iframe);
-                                            iframe = null;
-                                          }
-                                        }
-                                      }
-                                    ");
-                            #endif
-                            _macWVObj.EvaluateJS(@"Unity.call('ua=' + navigator.userAgent)");
-                            #endif
-                        }, enableWKWebView: true);
-                    #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-                        _macWVObj.bitmapRefreshCycle = 1;
-                    #endif
-                    _macWVObj.SetMargins(0, 0, 0, 0);
-                    _macWVObj.SetVisibility(false);
-                    _webViewObject.SetActive(false);
-                    return _webViewObject; // Return
-                } else { // Initialized
-                    return _webViewObject; // Return
-                }
+                if (settings.debug_mode) Debug.Log("VK SDK инициализирован для платформы: "+settings.platform);
             }
         }
 
@@ -255,7 +168,7 @@ namespace VK.SDK{
         public string LoadSDKConfigs(string path, bool encoded = false){
             // Check File Exists
             if (!File.Exists(path)){ // No File
-                Debug.Log("Файл конфигураций \"" + path + "\" не найден. Будут использованы настройки из инспектора или по-умолчанию.");
+                if (settings.debug_mode) Debug.Log("Файл конфигураций \"" + path + "\" не найден. Будут использованы настройки из инспектора или по-умолчанию.");
                 return null;
             }
 
@@ -270,7 +183,7 @@ namespace VK.SDK{
             }
 
             // Return Data
-            Debug.Log("Файл конфигураций \"" + path + "\" был успешно загружен с устройства.");
+            if (settings.debug_mode) Debug.Log("Файл конфигураций \"" + path + "\" был успешно загружен с устройства.");
             return _data;
         }
 
@@ -292,26 +205,7 @@ namespace VK.SDK{
 
             // Save File
             File.WriteAllText(path, data); // Save datas to file
-            Debug.Log("Файл конфигураций успешно сохранен в: " + path);
-        }
-
-        //============================================================
-        //  @class      VKSDK
-        //  @method     Start()
-        //  @type       Internal Void
-        //  @usage      Call when scene initialized
-        //============================================================
-        void Start(){
-
-        }
-
-        //============================================================
-        //  @class      VKSDK
-        //  @method     Update()
-        //  @type       Internal Void
-        //  @usage      Call every tick
-        //============================================================
-        void Update(){
+            if (settings.debug_mode) Debug.Log("Файл конфигураций успешно сохранен в: " + path);
         }
 
         //============================================================
@@ -368,7 +262,7 @@ namespace VK.SDK{
             StartCoroutine(_sendRequest(_api_uri + method, requestedData, (string jr) => {
                 if (complete != null)
                     complete(jr);
-                Debug.Log("VK API Response: " + jr);
+                if (settings.debug_mode) Debug.Log("VK API Response: " + jr);
             }, (BaseErrorModel err) => {
                 if (error != null)
                     error(err);
@@ -377,21 +271,15 @@ namespace VK.SDK{
 
         //============================================================
         //  @class      VKSDK
-        //  @method     ShowLoginWindow()
+        //  @method     Auth
         //  @type       Public void
-        //  @usage      Show Authentication Window
+        //  @usage      Authenticate User
+        //  @args       (callback) complete - On Auth Complete
+        //              (error) error - On Auth Error
         //============================================================
-        private bool _handlersInitialized = false; // Authentication WebView Handlers Flag
-        private bool _isAuthenticationProcess = false; // Authentication Process Flag
-        private string _finalAuthURL = ""; // Final Authenrication URL
-        public delegate void OnVKAuthDoneDelegate(string access_token);
-        public delegate void OnVKAuthErrorDelegate(BaseErrorModel error);
-        public event OnVKAuthDoneDelegate OnAuthenticationComplete;
-        public event OnVKAuthErrorDelegate OnAuthenticationError;
-        public void ShowLoginWindow(){
-            // Show General Object
-            _webViewObject.SetActive(true);
-
+        public delegate void OnVKAuthComplete(string access_token); // Authentication Complete Delegate
+        public delegate void OnVKAuthError(BaseErrorModel error); // Authentication Error Delegate
+        public void Auth(OnVKAuthComplete complete = null, OnVKAuthError error = null){
             // Generate Scopes
             List<string> _slist = new List<string>();
             if (application.friends) _slist.Add("friends");
@@ -415,117 +303,80 @@ namespace VK.SDK{
             if (application.market) _slist.Add("market");
             string _scopes = String.Join(",", _slist.ToArray());
 
-            // Detect Platform
-            _isAuthenticationProcess = true;
-            _finalAuthURL = _oauth_uri + "?client_id=" + application.app_id + "&display=" + application.display + "&scope=" + _scopes + "&response_type=" + application.response_type + "&v=" + settings.api_version + "&state=" + application.state;
-            if (Application.platform == RuntimePlatform.WindowsEditor || Application.platform == RuntimePlatform.WindowsPlayer){ // Windows
-                if (!_handlersInitialized){
-                    _winWVObj.OnNavigationCompleted += OnWindowsNavigationComplete;
-                    _winWVObj.OnNavigationFailed += OnWindowsNavigationError;
-                    _winWVObj.OnClose += OnWindowsWebViewClosed;
-                    _handlersInitialized = true;
-                }
-                _winWVObj.Navigate(_finalAuthURL);
-                _winWVObj.Show(); // Show
-            } else { // Mac
-                _macWVObj.LoadURL(_finalAuthURL);
-                _macWVObj.SetVisibility(true); // Set Visibility
-            }
+            // Get Authentication Code
+            StartCoroutine(_getAuthCode(_scopes, (AuthCodeModel auth_code) => { // Authentication Code Successfully received
+                _authCode = auth_code; // Set Auth Code Model
+                _getAccessToken((string at) =>{ // Token Request Complete
+                    complete(at); // Complete
+                }, (BaseErrorModel e) => { // Token Request Error
+                    if (error != null) error(e);
+                });
+            }, (BaseErrorModel e) => { // Authentication Code Request Error
+                if (error != null) error(e); // Return Error
+            }));
         }
+
         //============================================================
         //  @class      VKSDK
-        //  @method     CloseLoginWindow()
-        //  @type       Public void
-        //  @usage      Show Authentication Window
+        //  @method     _getAccessToken
+        //  @type       Private Void
+        //  @usage      Open Authentication Window and Get Access Token
+        //  @args       (callback) complete - On Request Complete
+        //              (error) error - On Request Error
         //============================================================
-        public void CloseLoginWindow(){
-            if (Application.platform == RuntimePlatform.WindowsEditor || Application.platform == RuntimePlatform.WindowsPlayer){ // Windows
-                _isAuthenticationProcess = false;
-                _winWVObj.Stop(); // Stop Loading
-                _winWVObj.Hide(); // Hide
-            } else {
-                _isAuthenticationProcess = false;
-                _macWVObj.SetVisibility(false); // Set Visibility
-            }
+        public delegate void OnGetTokenComplete(string access_token); // Token Request Complete
+        public delegate void OnGetTokenError(BaseErrorModel error); // Token Request Error
+        private bool _isHandled = false; // Handle
+        private void _getAccessToken(OnGetTokenComplete complete = null, OnGetTokenError error = null){
+            // Generate URL
+            string _url = _oauth_uri + "code_auth?stage=check&code=" + _authCode.auth_code; // Set URL
 
-            // Hide General Object
-            _webViewObject.SetActive(false);
+            // Open Window
+            _isHandled = false; // Set Handled Flag
+            Application.OpenURL(_url); // Open URL
+
+            // Invoke Token Request
+            StartCoroutine(_repeatTokenRequest((string at)=> {
+                if (complete != null) complete(at); // Complete
+            }, (BaseErrorModel e)=> {
+                if (error != null) error(e);
+            }));
         }
 
-        // Private Handlers for WebView
-        private void OnWindowsNavigationComplete(WWebView webView, string data){
-            _CompleteAuthentication(data, true);
-        }
-        private void OnWindowsNavigationError(WWebView webView, int code, string url){
-            if (_isAuthenticationProcess){
-                _isAuthenticationProcess = false;
-                BaseErrorModel _error = new BaseErrorModel();
-                _error.error_code = code;
-                _error.error_msg = "Ошибка авторизации: не удалось перейти на веб-страницу "+url;
-                if(OnAuthenticationError!=null) OnAuthenticationError(_error);
-            }
-        }
-        private bool OnWindowsWebViewClosed(WWebView webView){
-            if (_isAuthenticationProcess){
-                _isAuthenticationProcess = false;
-                BaseErrorModel _error = new BaseErrorModel();
-                _error.error_code = 999;
-                _error.error_msg = "Ошибка авторизации: пользователь закрыл окно авторизации";
-                if (OnAuthenticationError != null)
-                    OnAuthenticationError(_error);
-                return true;
-            } else {
-                return true;
-            }
-        }
-        private void OnMacNavigationComplete(string data){
-            _CompleteAuthentication(data, false);
-        }
-        private void OnMacNavigationError(string message){
-            if (_isAuthenticationProcess){
-                _isAuthenticationProcess = false;
-                BaseErrorModel _error = new BaseErrorModel();
-                _error.error_code = 500;
-                _error.error_msg = "Ошибка авторизации: " + message;
-                if (OnAuthenticationError != null) OnAuthenticationError(_error);
-            }
-        }
-        private void _CompleteAuthentication(string data, bool is_windows){
-            Debug.Log("WebView Navigated to: " + data);
-            NameValueCollection _keys = new NameValueCollection(); // Create Collection
+        //============================================================
+        //  @class      VKSDK
+        //  @method     _getAuthCode()
+        //  @type       Private IEnumerator
+        //  @usage      Get VK Authentication Code
+        //  @args       (callback) complete - On Request Complete
+        //              (error) error - On Request Error
+        //============================================================
+        private delegate void OnAuthCodeCompleted(AuthCodeModel auth_code);
+        private delegate void OnAuthCodeError(BaseErrorModel error);
+        private IEnumerator _getAuthCode(string scopes, OnAuthCodeCompleted complete = null, OnAuthCodeError error = null){
+            string _url = _oauth_uri + "get_auth_code?"; // Get Auth Code
+            _url += "scope=" + scopes; // Set Scopes
+            _url += "&client_id=" + application.app_id; // Set Application ID
+            var request = new WWW(_url); // Create WWW Request
+            yield return request; // Send Request
 
-            // Check URL
-            if (data.Contains("https://oauth.vk.com/blank.html"))
-            { // Has URL
-                _keys = _parseQueryString(data);
-            }
-            if (_isAuthenticationProcess && data != _finalAuthURL){
-                if (_keys["access_token"] == null && _keys.Count > 0){
-                    _isAuthenticationProcess = false;
+            // Work with Response
+            if (request.error != null){ // Request has error
+                throw new Exception("Не удалось отправить запрос к серверу VK API. Проверьте соединение с интернетом и попробуйте снова.");
+            }else{ // No Errors
+                if (request.text.Length < 1){ // Error
                     BaseErrorModel _error = new BaseErrorModel();
-                    _error.error_code = 998;
-                    _error.error_msg = "Ошибка авторизации: сервер не вернул токен доступа пользователя";
-                    if (OnAuthenticationError != null)
-                        OnAuthenticationError(_error);
-                } else {
-                    _isAuthenticationProcess = false;
-                    authentication.access_token = _keys["access_token"];
-                    authentication.expires_in = (_keys["expires_in"] != null) ? int.Parse(_keys["expires_in"]) : 0;
-                    authentication.user_id = (_keys["user_id"] != null) ? int.Parse(_keys["user_id"]) : 0;
-                    if (OnAuthenticationComplete != null)
-                        OnAuthenticationComplete(authentication.access_token);
-                    if (is_windows){
-                        _winWVObj.Hide(); // Hide WebView
-                    } else {
-                        _macWVObj.SetVisibility(false);
-                    }
-
-                    // Hide General Window
-                    _webViewObject.SetActive(false);
-
-                    // Save Configuration
-                    if (application.autosave_data){
-                        SaveSDKConfigs(_auth_data_path, JsonUtility.ToJson(authentication), true);
+                    _error.error_code = 999;
+                    _error.error_msg = "Не удалось получить код авторизации VK API. Попробуйте изменить ваш запрос.";
+                    error(_error); // Call Error
+                } else { // All Right
+                    BaseRequestModel response = JsonUtility.FromJson<BaseRequestModel>(request.text); // Get Base Model from Response Text
+                    if (response.error.error_code == -1){ // Response not has an errors
+                        AuthCodeModel auth_code = JsonUtility.FromJson<AuthCodeModel>(request.text); // Get Authentication Model from Response
+                        if (complete != null) complete(auth_code); // Return Complete
+                    } else { // Reponse has errors
+                        if (error != null) error(response.error); // Show Error
+                        if (settings.debug_mode) Debug.Log("VK SDK Error: " + response.error.error_msg);
                     }
                 }
             }
@@ -533,26 +384,75 @@ namespace VK.SDK{
 
         //============================================================
         //  @class      VKSDK
-        //  @method     _parseQueryString()
-        //  @type       Private static void
-        //  @usage      Parse URL Params
-        //  @args       (string) url - Requested URL
+        //  @method     _requestAccessToken()
+        //  @type       Private IEnumerator
+        //  @usage      Get VK Access Token
+        //  @args       (callback) complete - On Request Complete
+        //              (error) error - On Request Error
         //============================================================
-        private static NameValueCollection _parseQueryString(string url){
-            NameValueCollection nvc = new NameValueCollection();
-            // remove anything other than query string from url
-            if (url.Contains("#")){
-                url = url.Substring(url.IndexOf('#') + 1);
-            }
-            foreach (string vp in Regex.Split(url, "&")){
-                string[] singlePair = Regex.Split(vp, "=");
-                if (singlePair.Length == 2){
-                    nvc.Add(singlePair[0], singlePair[1]);
-                } else {
-                    nvc.Add(singlePair[0], string.Empty);
+        private delegate void OnATComplete(string access_token);
+        private delegate void OnATError(BaseErrorModel error);
+        private IEnumerator _requestAccessToken(OnATComplete complete = null, OnATError error = null) {
+            string _url = _oauth_uri + "code_auth_token?"; // Get Access Token URL
+            _url += "device_id=" + _authCode.device_id; // Set Device ID
+            _url += "&client_id=" + application.app_id; // Set Application ID
+            var request = new WWW(_url); // Create WWW Request
+            yield return request; // Send Request
+
+            // Work with Response
+            if (request.error != null){ // Request has error
+                BaseErrorModel _err = new BaseErrorModel();
+                _err.error_code = 999;
+                _err.error_msg = "Токен не был получен, либо авторизация еще не пройдена. Повторная попытка авторизации...";
+                error(_err);
+            } else { // No Errors
+                if (request.text.Length < 1) { // Error
+                    BaseErrorModel _err = new BaseErrorModel();
+                    _err.error_code = 999;
+                    _err.error_msg = "Сервер передал пустой ответ. Повторная попытка авторизации...";
+                } else { // All Right
+                    BaseRequestModel response = JsonUtility.FromJson<BaseRequestModel>(request.text); // Get Base Model from Response Text
+                    if (response.error.error_code == -1) { // Response not has an errors
+                        AuthenticationModel auth = JsonUtility.FromJson<AuthenticationModel>(request.text); // Parse Auth Data
+                        if (auth.access_token.Length > 0){ // Has Access Token
+                            authentication = auth; // Set Authentication Data
+                            _isHandled = true; // Set Handled
+
+                            // Save Configuration
+                            if (application.autosave_data){
+                                SaveSDKConfigs(_auth_data_path, JsonUtility.ToJson(authentication), true);
+                            }
+
+                            // Return Done
+                            complete(auth.access_token); // Return Token
+                        } else { // Error
+                            BaseErrorModel _err = new BaseErrorModel();
+                            _err.error_code = 999;
+                            _err.error_msg = "Сервер передал ответ без токена доступа. Повторная попытка авторизации...";
+                            error(_err);
+                        }
+                    } else { // Reponse has errors
+                        if (error != null) error(response.error); // Show Error
+                        if (settings.debug_mode) Debug.Log("VK SDK Error: " + response.error.error_msg);
+                    }
                 }
             }
-            return nvc;
+        }
+        private IEnumerator _repeatTokenRequest(OnATComplete complete = null, OnATError error = null){
+            int timeout = 0; // Set Timeout
+            while(!_isHandled && timeout != settings.auth_timeout * 1000){ // Not Timeout and Not Token
+                StartCoroutine(_requestAccessToken((string access_token) => { // Complete Token
+                    _isHandled = true; // Handled
+                    if (complete != null) complete(access_token); // Complete Callback
+                }, (BaseErrorModel e) => { // Error
+                    if (settings.debug_mode) Debug.Log("VK Auth State: " + e.error_msg);
+                }));
+                timeout++; // Timeout
+                yield return new WaitForSeconds(settings.auth_interval); // Set Interval
+            }
+            if (!_isHandled){
+                if (settings.debug_mode) Debug.Log("Таймаут авторизации в приложении VK");
+            }
         }
 
         //============================================================
@@ -584,7 +484,7 @@ namespace VK.SDK{
                 { // Reponse has errors
                     if (error != null)
                         error(response.error); // Show Error
-                    Debug.Log("VK SDK Error: " + response.error.error_msg);
+                    if (settings.debug_mode) Debug.Log("VK SDK Error: " + response.error.error_msg);
                 }
             }
         }
@@ -612,4 +512,3 @@ namespace VK.SDK{
         }
     }
 }
-

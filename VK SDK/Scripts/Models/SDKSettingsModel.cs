@@ -21,7 +21,9 @@ using UnityEngine;
 //===================================================
 [System.Serializable]
 public class SDKSettingsModel{
+    [Tooltip("Режим отладки")] public bool debug_mode = false;                              // SDK Debug Mode
     [Tooltip("Версия API")] public string api_version = "5.103";                            // SDK API Version
     [Tooltip("Platform (Определяется автоматически)")] public string platform = "";         // SDK Platform
-    [Tooltip("Таймаут Авторизации")] public int auth_timeout = 30000;                       // Auth timeout
+    [Tooltip("Интервал проверки авторизации")] public float auth_interval = 3f;             // Auth Interval
+    [Tooltip("Таймаут Авторизации")] public float auth_timeout = 300f;                      // Auth timeout
 }
