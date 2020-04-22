@@ -14,10 +14,10 @@ using UnityEngine.UI;
 //  Unity
 //
 //  @name           VK Standalone SDK
-//  @developer      Ocugine Games
+//  @developer      VK
 //  @version        0.4.3
 //  @build          403
-//  @url            https://vk.com/ocugine
+//  @url            https://vk.com/dev
 //  @license        MIT
 //===================================================
 
@@ -120,6 +120,7 @@ namespace VK.SDK{
                 _error_data += "VK SDK Error Type: " + code + "\n\n";
                 _error_data += "================================== \n\n";
                 _error_data += message;
+				File.WriteAllText(_log_data_path, _error_data); // Save log to file
                 Debug.Log("Возникло исключение при работе скрипта. Данные об ошибке записаны в "+_log_data_path);
             }
         }

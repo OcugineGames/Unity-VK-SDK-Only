@@ -10,10 +10,10 @@ using UnityEngine;
 //  Unity
 //
 //  @name           VK Standalone SDK
-//  @developer      Ocugine Games
-//  @version        0.4.2
-//  @build          402
-//  @url            https://vk.com/ocugine
+//  @developer      VK
+//  @version        0.4.3
+//  @build          403
+//  @url            https://vk.com/dev
 //  @license        MIT
 //===================================================
 //===================================================
